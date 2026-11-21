@@ -22,22 +22,23 @@ Both scripts need only `docker`.
 
 ## start.sh usage
 
-Asks what to mount before launching the container. Pressing Enter takes the default:
-yes for pi config, skills, git identity and workspace; no for HTTPS credentials and SSH keys.
+Asks what to mount before launching the container. Pressing Enter takes the default.
+Mode per mount is `no`, `ro` or `rw`:
 
 ```
-~/.pi/agent   pi config, sessions, credentials
-~/.agents     shared skills (~/.agents/skills/<name>/SKILL.md)
-identity      ~/.gitconfig (read-only): git user name, email, LFS filter
-https         ~/.git-credentials and ~/.config/git (both read-only; git `store` helper reads tokens)
-ssh           ~/.ssh (read-only) and the ssh-agent socket (not forwarded on macOS)
-.             current directory, as /workspace
+~/.pi/agent   pi config, sessions, credentials              default ro
+~/.agents     shared skills (~/.agents/skills/<name>/SKILL.md)  default ro
+.             current directory, as /workspace              default rw
+identity      ~/.gitconfig (read-only): git user name, email, LFS filter   default yes
+https         ~/.git-credentials and ~/.config/git (read-only; git `store` helper reads tokens)   default no
+ssh           ~/.ssh (read-only) and the ssh-agent socket (not forwarded on macOS)   default no
 ```
 
-Each question can be pre-answered with `--agent`/`--no-agent`, `--agents`/`--no-agents`,
-`--identity`/`--no-identity`, `--https`/`--no-https`, `--ssh`/`--no-ssh`, `--workspace`/`--no-workspace`,
-or with `PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_IDENTITY`, `PI_MOUNT_HTTPS`, `PI_MOUNT_SSH`,
-`PI_MOUNT_WORKSPACE` set to `1` or `0`.
+Pre-answer modes with `--agent=MODE`, `--agents=MODE`, `--workspace=MODE` (`MODE` = `no|ro|rw`),
+or `PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_WORKSPACE` (`no|ro|rw`, `0` = no, `1` = default).
+`--agent` / `--agents` / `--workspace` alone take the default mode; `--no-agent`, `--no-agents`,
+`--no-workspace` skip the mount. Yes/no mounts: `--identity`/`--no-identity`, `--https`/`--no-https`,
+`--ssh`/`--no-ssh`, or `PI_MOUNT_IDENTITY`, `PI_MOUNT_HTTPS`, `PI_MOUNT_SSH` set to `1` or `0`.
 With no TTY (non-interactive shell, CI) nothing is asked and each mount takes its default.
 
 `PI_IMAGE` picks another image name, `ANTHROPIC_API_KEY` is forwarded when set, and

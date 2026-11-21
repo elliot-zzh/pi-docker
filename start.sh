@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Launches pi in the pi-sandbox image, after asking what to mount.
-# Pre-answer the questions with --agent/--no-agent, --agents/--no-agents,
-# --identity/--no-identity, --https/--no-https, --ssh/--no-ssh,
-# --workspace/--no-workspace, or with PI_MOUNT_AGENT, PI_MOUNT_AGENTS,
-# PI_MOUNT_IDENTITY, PI_MOUNT_HTTPS, PI_MOUNT_SSH, PI_MOUNT_WORKSPACE (0 or 1).
-# Without a TTY every question takes its default (shown as [Y/n] or [y/N]).
+# Mode per mount: no | ro | rw.
+#   ~/.pi/agent, ~/.agents: default ro;  current dir (/workspace): default rw.
+# Pre-answer with --agent=MODE, --agents=MODE, --workspace=MODE, or with
+# PI_MOUNT_AGENT, PI_MOUNT_AGENTS, PI_MOUNT_WORKSPACE (no|ro|rw, or 0 = no, 1 = default).
+# --agent / --agents / --workspace alone take the default mode; --no-agent,
+# --no-agents, --no-workspace skip the mount.
+# Yes/no mounts (git identity, https, ssh) are pre-answered with --identity/--no-identity,
+# --https/--no-https, --ssh/--no-ssh, or PI_MOUNT_IDENTITY, PI_MOUNT_HTTPS, PI_MOUNT_SSH (0 or 1).
+# Without a TTY every question takes its default.
 set -euo pipefail
 
 IMAGE="${PI_IMAGE:-pi-sandbox}"
 
 usage() {
   cat <<'EOF'
-usage: start.sh [--agent|--no-agent] [--agents|--no-agents]
+usage: start.sh [--agent[=no|ro|rw]] [--agents[=no|ro|rw]] [--workspace[=no|ro|rw]]
                 [--identity|--no-identity] [--https|--no-https] [--ssh|--no-ssh]
-                [--workspace|--no-workspace] [-h] [-- pi-args...]
+                [-h] [-- pi-args...]
 EOF
 }
 
@@ -21,25 +25,28 @@ die() { printf '%s\n' "$*" >&2; exit 1; }
 
 mount_agent="${PI_MOUNT_AGENT:-}"
 mount_agents="${PI_MOUNT_AGENTS:-}"
+mount_project="${PI_MOUNT_WORKSPACE:-}"
 mount_identity="${PI_MOUNT_IDENTITY:-}"
 mount_https="${PI_MOUNT_HTTPS:-}"
 mount_ssh="${PI_MOUNT_SSH:-}"
-mount_project="${PI_MOUNT_WORKSPACE:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --agent=*)      mount_agent=${1#--agent=} ;;
     --agent)        mount_agent=1 ;;
-    --no-agent)     mount_agent=0 ;;
+    --no-agent)     mount_agent=no ;;
+    --agents=*)     mount_agents=${1#--agents=} ;;
     --agents)       mount_agents=1 ;;
-    --no-agents)    mount_agents=0 ;;
+    --no-agents)    mount_agents=no ;;
+    --workspace=*)  mount_project=${1#--workspace=} ;;
+    --workspace)    mount_project=1 ;;
+    --no-workspace) mount_project=no ;;
     --identity)     mount_identity=1 ;;
     --no-identity)  mount_identity=0 ;;
     --https)        mount_https=1 ;;
     --no-https)     mount_https=0 ;;
     --ssh)          mount_ssh=1 ;;
     --no-ssh)       mount_ssh=0 ;;
-    --workspace)    mount_project=1 ;;
-    --no-workspace) mount_project=0 ;;
     -h|--help)      usage; exit 0 ;;
     --)             shift; break ;;
     -*)             usage >&2; die "unknown option: $1" ;;
@@ -60,19 +67,49 @@ confirm() { # confirm <prompt> <y|n default> -> 0 = yes; no prompt without a TTY
   esac
 }
 
-ask() { # ask <var-name> <prompt> <y|n default>; skipped when the variable is preset
+ask() { # ask <var-name> <prompt> <y|n default>; a preset value skips the prompt
   local name=$1 value=1
-  if [ -n "${!name}" ]; then return 0; fi
-  confirm "$2" "$3" || value=0
+  if [ -n "${!name}" ]; then
+    case "${!name}" in 0) value=0 ;; 1) value=1 ;; *) die "invalid value for $name: ${!name} (use 0 or 1)" ;; esac
+  else
+    confirm "$2" "$3" || value=0
+  fi
   printf -v "$name" '%s' "$value"
 }
 
-ask mount_agent    "Mount ~/.pi/agent (config, sessions, credentials)?" y
-ask mount_agents   "Mount ~/.agents (shared skills)?" y
+mode_value() { # mode_value <preset> <default mode> -> prints no|ro|rw
+  case "$1" in
+    0|no) echo no ;;
+    1)    echo "$2" ;;
+    ro|rw) echo "$1" ;;
+    *)    die "invalid mount mode: $1 (use no, ro or rw)" ;;
+  esac
+}
+
+ask_mode() { # ask_mode <var-name> <prompt> <default mode>; a preset value skips the prompt
+  local name=$1 def=$3 answer='' mode
+  if [ -n "${!name}" ]; then
+    mode=$(mode_value "${!name}" "$def")
+  else
+    mode=$def
+    if [ -t 0 ]; then
+      read -r -p "$2 [no/ro/rw, default $def] " answer || true
+      case "$answer" in
+        n|no) mode=no ;;
+        ro)   mode=ro ;;
+        rw)   mode=rw ;;
+      esac
+    fi
+  fi
+  printf -v "$name" '%s' "$mode"
+}
+
+ask_mode mount_agent  "Mount ~/.pi/agent (config, sessions, credentials)?" ro
+ask_mode mount_agents "Mount ~/.agents (shared skills)?" ro
+ask_mode mount_project "Mount current dir as /workspace?" rw
 ask mount_identity "Mount git identity (~/.gitconfig, read-only)?" y
 ask mount_https    "Mount HTTPS git credentials (~/.git-credentials, ~/.config/git)?" n
 ask mount_ssh      "Mount SSH keys and config (~/.ssh) and the ssh-agent socket?" n
-ask mount_project  "Mount current dir as /workspace?" y
 
 command -v docker >/dev/null 2>&1 || die "docker not found"
 docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image '$IMAGE' not found - run ./build.sh"
@@ -80,15 +117,15 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image '$IMAGE' not found -
 args=(docker run --rm -it -e ANTHROPIC_API_KEY)
 mounted=()
 
-if [ "$mount_agent" = 1 ]; then
+if [ "$mount_agent" != no ]; then
   mkdir -p "$HOME/.pi/agent"
-  args+=(-v "$HOME/.pi/agent:/root/.pi/agent")
-  mounted+=("~/.pi/agent")
+  args+=(-v "$HOME/.pi/agent:/root/.pi/agent:$mount_agent")
+  mounted+=("~/.pi/agent:$mount_agent")
 fi
-if [ "$mount_agents" = 1 ]; then
+if [ "$mount_agents" != no ]; then
   mkdir -p "$HOME/.agents"
-  args+=(-v "$HOME/.agents:/root/.agents")
-  mounted+=("~/.agents")
+  args+=(-v "$HOME/.agents:/root/.agents:$mount_agents")
+  mounted+=("~/.agents:$mount_agents")
 fi
 if [ "$mount_identity" = 1 ]; then
   if [ -f "$HOME/.gitconfig" ]; then
@@ -118,9 +155,9 @@ if [ "$mount_ssh" = 1 ]; then
     mounted+=("ssh-agent")
   fi
 fi
-if [ "$mount_project" = 1 ]; then
-  args+=(-v "$PWD:/workspace" -w /workspace)
-  mounted+=("/workspace")
+if [ "$mount_project" != no ]; then
+  args+=(-v "$PWD:/workspace:$mount_project" -w /workspace)
+  mounted+=("/workspace:$mount_project")
 fi
 
 if [ ${#mounted[@]} -eq 0 ]; then
