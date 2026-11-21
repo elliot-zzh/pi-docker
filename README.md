@@ -73,9 +73,9 @@ Note that gcc/g++ is removed and replaced by clang toolchain.
 
 Add a `RUN` line to `Dockerfile.pi`, rebuild with `./build.sh`. Installs must target
 `/opt` or `/usr/local` (`/root` is not a volume). The apt, npm, uv and rustup layers
-use BuildKit cache mounts; the docs `COPY` is first and the frequently updated `pi`
-npm layer is last, so edits to `container/AGENTS.md`/`README.md` or a pi version bump rebuild
-only cheap layers.
+use BuildKit cache mounts. The docs `COPY` is last and the frequently updated `pi` npm layer
+sits just before it, so edits to `container/AGENTS.md`/`README.md` rebuild only the docs layer,
+and a pi version bump rebuilds only the pi and smoke-test layers.
 
 ## License
 
