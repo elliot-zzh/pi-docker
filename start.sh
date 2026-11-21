@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Launches pi in the pi-sandbox image, after asking what to mount.
-# Mode per mount: no | ro | rw.
-#   ~/.pi/agent, ~/.agents: default ro;  current dir (/workspace): default rw.
+# Modes:
+#   ~/.pi/agent:  no | limited | rw     default limited
+#                 limited = whole dir read-only, sessions/ and tmp/ read-write
+#                 rw      = whole dir read-write
+#   ~/.agents:    no | ro | rw          default ro
+#   /workspace:   no | ro | rw          default rw
 # Pre-answer with --agent=MODE, --agents=MODE, --workspace=MODE, or with
-# PI_MOUNT_AGENT, PI_MOUNT_AGENTS, PI_MOUNT_WORKSPACE (no|ro|rw, or 0 = no, 1 = default).
+# PI_MOUNT_AGENT, PI_MOUNT_AGENTS, PI_MOUNT_WORKSPACE (a mode, or 0 = no, 1 = default).
 # --agent / --agents / --workspace alone take the default mode; --no-agent,
 # --no-agents, --no-workspace skip the mount.
 # Yes/no mounts (git identity, https, ssh) are pre-answered with --identity/--no-identity,
@@ -15,7 +19,7 @@ IMAGE="${PI_IMAGE:-pi-sandbox}"
 
 usage() {
   cat <<'EOF'
-usage: start.sh [--agent[=no|ro|rw]] [--agents[=no|ro|rw]] [--workspace[=no|ro|rw]]
+usage: start.sh [--agent[=no|limited|rw]] [--agents[=no|ro|rw]] [--workspace[=no|ro|rw]]
                 [--identity|--no-identity] [--https|--no-https] [--ssh|--no-ssh]
                 [-h] [-- pi-args...]
 EOF
@@ -77,36 +81,40 @@ ask() { # ask <var-name> <prompt> <y|n default>; a preset value skips the prompt
   printf -v "$name" '%s' "$value"
 }
 
-mode_value() { # mode_value <preset> <default mode> -> prints no|ro|rw
-  case "$1" in
-    0|no) echo no ;;
-    1)    echo "$2" ;;
-    ro|rw) echo "$1" ;;
-    *)    die "invalid mount mode: $1 (use no, ro or rw)" ;;
+mode_value() { # mode_value <preset> <default mode> <allowed modes...> -> prints a mode
+  local value=$1 def=$2 m
+  shift 2
+  case "$value" in
+    0) echo no; return ;;
+    1) echo "$def"; return ;;
   esac
+  for m in "$@"; do
+    if [ "$value" = "$m" ]; then echo "$value"; return; fi
+  done
+  die "invalid mount mode: $value (use one of: $*)"
 }
 
-ask_mode() { # ask_mode <var-name> <prompt> <default mode>; a preset value skips the prompt
-  local name=$1 def=$3 answer='' mode
+ask_mode() { # ask_mode <var-name> <prompt> <default mode> <allowed modes...>; a preset value skips the prompt
+  local name=$1 prompt=$2 def=$3 answer='' mode m
+  shift 3
   if [ -n "${!name}" ]; then
-    mode=$(mode_value "${!name}" "$def")
+    mode=$(mode_value "${!name}" "$def" "$@")
   else
     mode=$def
     if [ -t 0 ]; then
-      read -r -p "$2 [no/ro/rw, default $def] " answer || true
-      case "$answer" in
-        n|no) mode=no ;;
-        ro)   mode=ro ;;
-        rw)   mode=rw ;;
-      esac
+      read -r -p "$prompt [$(IFS=/; echo "$*"), default $def] " answer || true
+      for m in "$@"; do
+        if [ "$answer" = "$m" ]; then mode=$m; fi
+      done
+      case "$answer" in n|no) mode=no ;; esac
     fi
   fi
   printf -v "$name" '%s' "$mode"
 }
 
-ask_mode mount_agent  "Mount ~/.pi/agent (config, sessions, credentials)?" ro
-ask_mode mount_agents "Mount ~/.agents (shared skills)?" ro
-ask_mode mount_project "Mount current dir as /workspace?" rw
+ask_mode mount_agent   "Mount ~/.pi/agent (config, sessions, credentials)?" limited limited rw no
+ask_mode mount_agents  "Mount ~/.agents (shared skills)?" ro ro rw no
+ask_mode mount_project "Mount current dir as /workspace?" rw ro rw no
 ask mount_identity "Mount git identity (~/.gitconfig, read-only)?" y
 ask mount_https    "Mount HTTPS git credentials (~/.git-credentials, ~/.config/git)?" n
 ask mount_ssh      "Mount SSH keys and config (~/.ssh) and the ssh-agent socket?" n
@@ -117,11 +125,21 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image '$IMAGE' not found -
 args=(docker run --rm -it -e ANTHROPIC_API_KEY)
 mounted=()
 
-if [ "$mount_agent" != no ]; then
-  mkdir -p "$HOME/.pi/agent"
-  args+=(-v "$HOME/.pi/agent:/root/.pi/agent:$mount_agent")
-  mounted+=("~/.pi/agent:$mount_agent")
-fi
+case "$mount_agent" in
+  rw)
+    mkdir -p "$HOME/.pi/agent"
+    args+=(-v "$HOME/.pi/agent:/root/.pi/agent")
+    mounted+=("~/.pi/agent:rw")
+    ;;
+  limited)
+    mkdir -p "$HOME/.pi/agent/sessions" "$HOME/.pi/agent/tmp"
+    # nested rw mounts sit on top of the read-only parent
+    args+=(-v "$HOME/.pi/agent:/root/.pi/agent:ro"
+           -v "$HOME/.pi/agent/sessions:/root/.pi/agent/sessions"
+           -v "$HOME/.pi/agent/tmp:/root/.pi/agent/tmp")
+    mounted+=("~/.pi/agent:ro+sessions,tmp:rw")
+    ;;
+esac
 if [ "$mount_agents" != no ]; then
   mkdir -p "$HOME/.agents"
   args+=(-v "$HOME/.agents:/root/.agents:$mount_agents")

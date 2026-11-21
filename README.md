@@ -23,19 +23,20 @@ Both scripts need only `docker`.
 ## start.sh usage
 
 Asks what to mount before launching the container. Pressing Enter takes the default.
-Mode per mount is `no`, `ro` or `rw`:
 
 ```
-~/.pi/agent   pi config, sessions, credentials              default ro
-~/.agents     shared skills (~/.agents/skills/<name>/SKILL.md)  default ro
-.             current directory, as /workspace              default rw
+~/.pi/agent   no | limited | rw   default limited
+              limited: whole dir read-only; sessions/ and tmp/ read-write (normal use)
+              rw:      whole dir read-write (needed for OAuth refresh and /login)
+~/.agents     no | ro | rw       default ro   shared skills (~/.agents/skills/<name>/SKILL.md)
+/workspace    no | ro | rw       default rw   current directory
 identity      ~/.gitconfig (read-only): git user name, email, LFS filter   default yes
 https         ~/.git-credentials and ~/.config/git (read-only; git `store` helper reads tokens)   default no
 ssh           ~/.ssh (read-only) and the ssh-agent socket (not forwarded on macOS)   default no
 ```
 
-Pre-answer modes with `--agent=MODE`, `--agents=MODE`, `--workspace=MODE` (`MODE` = `no|ro|rw`),
-or `PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_WORKSPACE` (`no|ro|rw`, `0` = no, `1` = default).
+Pre-answer modes with `--agent=MODE`, `--agents=MODE`, `--workspace=MODE`, or
+`PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_WORKSPACE` (a mode, `0` = no, `1` = default).
 `--agent` / `--agents` / `--workspace` alone take the default mode; `--no-agent`, `--no-agents`,
 `--no-workspace` skip the mount. Yes/no mounts: `--identity`/`--no-identity`, `--https`/`--no-https`,
 `--ssh`/`--no-ssh`, or `PI_MOUNT_IDENTITY`, `PI_MOUNT_HTTPS`, `PI_MOUNT_SSH` set to `1` or `0`.
