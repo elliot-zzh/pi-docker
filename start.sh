@@ -131,12 +131,23 @@ case "$mount_agent" in
     mounted+=("~/.pi/agent:rw")
     ;;
   limited)
+    # The agent dir itself cannot be a read-only bind mount: pi takes
+    # trust.json.lock (a directory) inside it on every start, which fails with EROFS.
+    # So /root/.pi/agent is a container-local directory (ephemeral, writable) and
+    # each host entry is bind-mounted into it individually: sessions/, tmp/ and
+    # trust.json read-write, everything else read-only.
     mkdir -p "$HOME/.pi/agent/sessions" "$HOME/.pi/agent/tmp"
-    # nested rw mounts sit on top of the read-only parent
-    args+=(-v "$HOME/.pi/agent:/root/.pi/agent:ro"
-           -v "$HOME/.pi/agent/sessions:/root/.pi/agent/sessions"
-           -v "$HOME/.pi/agent/tmp:/root/.pi/agent/tmp")
-    mounted+=("~/.pi/agent:ro+sessions,tmp:rw")
+    [ -f "$HOME/.pi/agent/trust.json" ] || echo '{}' > "$HOME/.pi/agent/trust.json"
+    for entry in "$HOME"/.pi/agent/* "$HOME"/.pi/agent/.[!.]*; do
+      [ -e "$entry" ] || continue
+      name=${entry##*/}
+      case "$name" in
+        sessions|tmp|trust.json) mode=rw ;;
+        *) mode=ro ;;
+      esac
+      args+=(-v "$entry:/root/.pi/agent/$name:$mode")
+    done
+    mounted+=("~/.pi/agent:ro (sessions,tmp,trust.json:rw)")
     ;;
 esac
 if [ "$mount_agents" != no ]; then
