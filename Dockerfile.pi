@@ -10,7 +10,7 @@ COPY container/AGENTS.md /AGENTS.md
 COPY README.md /opt/pi-sandbox/README.md
 COPY LICENSE /opt/pi-sandbox/LICENSE
 
-# Toolchain: clang, clang++, lld, cmake, ninja, pkg-config, make, git, rg, curl,
+# Toolchain: clang, clang++, lld, cmake, ninja, pkg-config, make, git, openssh-client, rg, curl,
 # libssl-dev. libc6-dev, libstdc++-12-dev and binutils come in as clang deps;
 # there is no gcc/g++/cpp. Apt archives and lists live in BuildKit cache mounts,
 # not in the image layer.
@@ -23,6 +23,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       curl \
       bzip2 \
       git \
+      openssh-client \
       ripgrep \
       make \
       clang \

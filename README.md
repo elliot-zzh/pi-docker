@@ -22,21 +22,23 @@ Both scripts need only `docker`.
 
 ## start.sh usage
 
-Asks what to mount before launching the container;
-every question defaults to yes, so pressing Enter is theb normal path.
+Asks what to mount before launching the container. Pressing Enter takes the default:
+yes for pi config, skills, git identity and workspace; no for HTTPS credentials and SSH keys.
 
 ```
 ~/.pi/agent   pi config, sessions, credentials
 ~/.agents     shared skills (~/.agents/skills/<name>/SKILL.md)
-git           ~/.gitconfig, ~/.git-credentials, ~/.config/git, ~/.ssh and the
-              ssh-agent socket — whichever of them exist
+identity      ~/.gitconfig (read-only): git user name, email, LFS filter
+https         ~/.git-credentials and ~/.config/git (both read-only; git `store` helper reads tokens)
+ssh           ~/.ssh (read-only) and the ssh-agent socket (not forwarded on macOS)
 .             current directory, as /workspace
 ```
 
-Apart from interactive mounting,
-you can also skip one with `--no-agent`, `--no-agents`, `--no-git`, `--no-workspace`, or with
-`PI_MOUNT_AGENT=0` / `PI_MOUNT_AGENTS=0` / `PI_MOUNT_GIT=0` / `PI_MOUNT_WORKSPACE=0`.
-With no TTY (non-interactive shell, CI) nothing is asked and all are mounted.
+Each question can be pre-answered with `--agent`/`--no-agent`, `--agents`/`--no-agents`,
+`--identity`/`--no-identity`, `--https`/`--no-https`, `--ssh`/`--no-ssh`, `--workspace`/`--no-workspace`,
+or with `PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_IDENTITY`, `PI_MOUNT_HTTPS`, `PI_MOUNT_SSH`,
+`PI_MOUNT_WORKSPACE` set to `1` or `0`.
+With no TTY (non-interactive shell, CI) nothing is asked and each mount takes its default.
 
 `PI_IMAGE` picks another image name, `ANTHROPIC_API_KEY` is forwarded when set, and
 arguments after `--` go to pi (`./start.sh -- --help`).
@@ -54,7 +56,7 @@ arguments after `--` go to pi (`./start.sh -- --help`).
 | `pre-commit` | uv tool, env at `/opt/uv-tools` |
 | `rustc`, `cargo`, `rustup` | stable, minimal profile, `RUSTUP_HOME=/usr/local/rustup`, `CARGO_HOME=/usr/local/cargo` |
 | `clang`, `clang++`, `lld`, `cmake`, `ninja`, `pkg-config`, `make` | apt; `CC=clang`, `CXX=clang++` |
-| `git`, `rg`, `curl`, `bzip2`, `libssl-dev`, `libc6-dev`, `libstdc++-12-dev`, `binutils` | apt |
+| `git`, `openssh-client`, `rg`, `curl`, `bzip2`, `libssl-dev`, `libc6-dev`, `libstdc++-12-dev`, `binutils` | apt |
 
 Note that gcc/g++ is removed and replaced by clang toolchain.
 
