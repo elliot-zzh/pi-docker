@@ -6,12 +6,11 @@
 #                 rw      = whole dir read-write
 #   ~/.agents:    no | ro | rw          default ro
 #   /workspace:   no | ro | rw          default rw
-# Pre-answer with --agent=MODE, --agents=MODE, --workspace=MODE, or with
-# PI_MOUNT_AGENT, PI_MOUNT_AGENTS, PI_MOUNT_WORKSPACE (a mode, or 0 = no, 1 = default).
+# Pre-answer with --agent=MODE, --agents=MODE, --workspace=MODE.
 # --agent / --agents / --workspace alone take the default mode; --no-agent,
 # --no-agents, --no-workspace skip the mount.
 # Yes/no mounts (git identity, https, ssh) are pre-answered with --identity/--no-identity,
-# --https/--no-https, --ssh/--no-ssh, or PI_MOUNT_IDENTITY, PI_MOUNT_HTTPS, PI_MOUNT_SSH (0 or 1).
+# --https/--no-https, --ssh/--no-ssh.
 # Without a TTY every question takes its default.
 set -euo pipefail
 
@@ -27,12 +26,12 @@ EOF
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
-mount_agent="${PI_MOUNT_AGENT:-}"
-mount_agents="${PI_MOUNT_AGENTS:-}"
-mount_project="${PI_MOUNT_WORKSPACE:-}"
-mount_identity="${PI_MOUNT_IDENTITY:-}"
-mount_https="${PI_MOUNT_HTTPS:-}"
-mount_ssh="${PI_MOUNT_SSH:-}"
+mount_agent=
+mount_agents=
+mount_project=
+mount_identity=
+mount_https=
+mount_ssh=
 
 while [ $# -gt 0 ]; do
   case "$1" in

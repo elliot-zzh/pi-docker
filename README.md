@@ -35,11 +35,10 @@ https         ~/.git-credentials and ~/.config/git (read-only; git `store` helpe
 ssh           ~/.ssh (read-only) and the ssh-agent socket (not forwarded on macOS)   default no
 ```
 
-Pre-answer modes with `--agent=MODE`, `--agents=MODE`, `--workspace=MODE`, or
-`PI_MOUNT_AGENT`, `PI_MOUNT_AGENTS`, `PI_MOUNT_WORKSPACE` (a mode, `0` = no, `1` = default).
+Pre-answer modes with `--agent=MODE`, `--agents=MODE`, `--workspace=MODE`.
 `--agent` / `--agents` / `--workspace` alone take the default mode; `--no-agent`, `--no-agents`,
 `--no-workspace` skip the mount. Yes/no mounts: `--identity`/`--no-identity`, `--https`/`--no-https`,
-`--ssh`/`--no-ssh`, or `PI_MOUNT_IDENTITY`, `PI_MOUNT_HTTPS`, `PI_MOUNT_SSH` set to `1` or `0`.
+`--ssh`/`--no-ssh`.
 With no TTY (non-interactive shell, CI) nothing is asked and each mount takes its default.
 
 `PI_IMAGE` picks another image name, `ANTHROPIC_API_KEY` is forwarded when set, and
